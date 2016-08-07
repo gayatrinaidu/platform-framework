@@ -1,0 +1,33 @@
+['java', 'maven-publish'].each {
+    apply plugin : it
+}
+publishing {
+    publications {
+        myPublication(MavenPublication) {
+            // telling gradle to publish project's jar archive (2)
+            from components.java
+            // telling gradle to publish README file (2)
+            artifact ('README.txt') {
+                classifier = 'README'
+                extension  = 'md'
+            }
+            artifact (javadocJar) { // (3)
+                classifier = 'javadoc'
+            }
+            artifact (sourcesJar) { // (2)
+                classifier = 'sources'
+            }
+            
+        }
+    }
+    // telling gradle to publish artifact to local directory (3)
+    repositories {
+    	maven {
+      		credentials {
+        		username "admin"
+        		password "Platform@123"
+      		}
+      		url "http://localhost:8880/archiva/repository/snapshots"
+      	}
+    }
+}

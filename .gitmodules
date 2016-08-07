@@ -1,3 +1,6 @@
 [submodule "platform-rest-client"]
 	path = platform-rest-client
 	url = https://github.com/HarishM84/platform-rest-client.git
+[submodule "platform-model-designer"]
+	path = platform-model-designer
+	url = https://github.com/HarishM84/platform-model-designer.git
