@@ -7,7 +7,7 @@ publishing {
             // telling gradle to publish project's jar archive (2)
             from components.java
             // telling gradle to publish README file (2)
-            artifact ('README.txt') {
+            artifact ('README.md') {
                 classifier = 'README'
                 extension  = 'md'
             }
