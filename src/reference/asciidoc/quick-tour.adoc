@@ -1,0 +1,166 @@
+[[quick-tour]]
+=== Quick Tour for the impatient
+
+==== Introduction
+
+This is the 5 minute tour to get started with Platform Integration Kafka and Neo4j.
+
+Prerequisites: install and run Apache Kafka
+Then grab the platform-integration-kafka JAR and all of its dependencies - the easiest way to do that is to declare a dependency in
+your build tool, e.g. for Maven:
+
+[source,xml,subs="+attributes"]
+----
+<dependency>
+  <groupId>com.platform.integration</groupId>
+  <artifactId>platform-integration-kafka</artifactId>
+  <version>{platform-integration-version}</version>
+</dependency>
+----
+
+And for Gradle:
+
+[source,groovy,subs="+attributes"]
+----
+compile 'com.platform.integration:platform-integration-kafka:{platform-integration-version}'
+----
+-
+[[compatibility-kafka]]
+===== Compatibility for Kafka
+
+- Apache Kafka 0.10.0.0
+- Tested with Spring Framework version dependency is 4.2.7 but it is expected that the framework will work with earlier
+versions of Spring.
+- Annotation-based listeners require Spring Framework 4.1 or higher, however.
+- Minimum Java version: 7.
+
+Prerequisites: install and run Neo4j Application
+Then grab the platform-integration-neo4j JAR and all of its dependencies - the easiest way to do that is to declare a dependency in
+your build tool, e.g. for Maven:
+
+[source,xml,subs="+attributes"]
+----
+<dependency>
+  <groupId>com.platform.integration</groupId>
+  <artifactId>platform-integration-neo4j</artifactId>
+  <version>{platform-integration-version}</version>
+</dependency>
+----
+
+And for Gradle:
+
+[source,groovy,subs="+attributes"]
+----
+compile 'com.platform.integration:platform-integration-neo4j:{platform-integration-version}'
+----
+-
+[[compatibility-neo4j]]
+===== Compatibility for Neo4j
+
+- Tested with Spring Framework version dependency is 4.2.7 but it is expected that the framework will work with earlier
+versions of Spring.
+- Annotation-based listeners require Spring Framework 4.1 or higher, however.
+- Minimum Java version: 7.
+
+===== Very, Very Quick overview
+
+Using plain Java to send and receive a message:
+
+[source,java]
+----
+@Test
+	public void testKafkaSendAndRecieve() throws Throwable {
+		logger.info("Start " + this.testName.getMethodName());
+		ConfigurableApplicationContext context = Application.init();
+		MessageChannel toKafka = context.getBean("toKafka", MessageChannel.class);
+		for (int i = 0; i < 10; i++) {
+			toKafka.send(new GenericMessage<>("foo" + i));
+		}
+		PollableChannel fromKafka = context.getBean("received", PollableChannel.class);
+		Message<?> received = null;
+		int cnt = 10;
+		for (int i = 0; i < 10; i++) {
+			received = fromKafka.receive(10000);
+			if (received != null) {
+				break;
+			}
+			Thread.sleep(500);
+		}
+		Assert.notNull(received);
+		while (received != null) {
+			Assert.isTrue(received.getPayload().toString().startsWith("foo"));
+			cnt--;
+			logger.info(received);
+			Thread.sleep(1000);
+			received = fromKafka.receive(10000);
+		}
+		Assert.isTrue(cnt == 0);
+		context.close();
+		logger.info("Stop " + this.testName.getMethodName());
+	}
+----
+
+Using Spring Junit Runner to save, find by field (equals & starts with), sort by field entity from neo4j database
+
+[source,java]
+----
+	@Autowired
+	UserRepository repository;
+
+	@Test
+	public void test1_SaveUser() {
+		User user = new User();
+		user.setFirstName("One Platform");
+		user.setLastName("Altimetrik");
+		user = repository.save(user);
+		Assert.notNull(user.getId());
+		Assert.isTrue(repository.findByLastName("Altimetrik").iterator().hasNext());
+		user = new User();
+		user.setFirstName("Dev");
+		user.setLastName("Altimetrik");
+		user = repository.save(user);
+		user = new User();
+		user.setFirstName("QA");
+		user.setLastName("Altimetrik");
+		user = repository.save(user);
+		user = new User();
+		user.setFirstName("Master");
+		user.setLastName("Altimetrik");
+		user = repository.save(user);
+	}
+
+	@Test
+	public void test2_FindAll() {
+		Iterable<User> results = repository.findAll();
+		Assert.isTrue(results.iterator().hasNext());
+	}
+
+	@Test
+	public void test3_FindStartsWith() {
+		Pageable pageable = new PageRequest(0, 3);
+		Page<User> results = repository.findByLastNameStartsWith("Altimetrik", pageable);
+		Assert.isTrue(results.getSize() == 3);
+	}
+
+	@Test
+	public void test4_FindBySort() {
+		Sort sort = new Sort(Sort.Direction.ASC, "firstName");
+		List<User> results = repository.findByLastNameOrderByFirstNameAsc("Altimetrik", sort);
+		Assert.isTrue(results.size() == 4);
+		Assert.isTrue(results.iterator().next().getFirstName().equals("Dev"));
+	}
+
+	@Test
+	public void test8_DeleteId() {
+		User user = repository.findByLastName("Altimetrik").iterator().next();
+		Assert.notNull(user.getId());
+		repository.delete(user.getId());
+		Assert.isTrue(repository.findByLastName("Altimetrik").size() != 4);
+		List<User> users = repository.findByLastName("Altimetrik");
+		for (User user1 : users) {
+			repository.delete(user1.getId());
+		}
+	}
+
+----
+

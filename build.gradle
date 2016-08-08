@@ -14,11 +14,8 @@ buildscript {
 	dependencies {
 		classpath 'io.spring.gradle:docbook-reference-plugin:0.3.1'
         classpath 'org.asciidoctor:asciidoctor-gradle-plugin:1.5.0'
+        classpath 'org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:2.0.1'
     }
-}
-
-plugins {
-	id "org.sonarqube" version "1.2"
 }
 
 description = "Platform Framework"
@@ -26,16 +23,15 @@ description = "Platform Framework"
 apply plugin: 'base'
 apply plugin: 'project-report'
 apply plugin: 'idea'
-
+apply plugin: 'org.sonarqube'
 def docsDir = 'src/reference/asciidoc' // Will be default with newer asciidoctor plugin
 
 ext {
-	linkHomepage = 'https://github.com/spring-projects/spring-kafka'
-	linkCi = 'https://build.spring.io/browse/SK'
-	linkIssue = 'https://github.com/spring-projects/spring-kafka/issues'
-	linkScmUrl = 'https://github.com/spring-projects/spring-kafka'
-	linkScmConnection = 'https://github.com/spring-projects/spring-kafka.git'
-	linkScmDevConnection = 'git@github.com:spring-projects/spring-kafka.git'
+	linkHomepage = 'https://github.com/HarishM84/platform-framework'
+	linkCi = 'http://localhost:7070/jenkins/job/platform-framework/'
+	linkIssue = 'https://github.com/HarishM84/platform-framework/issues'
+	linkScmUrl = 'https://github.com/HarishM84/platform-framework'
+	linkScmConnection = 'https://github.com/HarishM84/platform-framework.git'
 
 }
 
@@ -111,7 +107,7 @@ subprojects { subproject ->
 		configFile = new File(rootDir, "src/checkstyle/checkstyle.xml")
 		toolVersion = "6.19"
 	}
-
+	
 	jacocoTestReport {
 		reports {
 			xml.enabled false
@@ -136,6 +132,7 @@ subprojects { subproject ->
 		archives sourcesJar
 		archives javadocJar
 	}
+	
 }
 project ('platform-model-designer') {
 	description = 'Platform Model Designer'
@@ -208,10 +205,10 @@ sonarqube {
 		property "sonar.links.ci", linkCi
 		property "sonar.links.issue", linkIssue
 		property "sonar.links.scm", linkScmUrl
-		property "sonar.links.scm_dev", linkScmDevConnection
 		property "sonar.java.coveragePlugin", "jacoco"
 	}
 }
+
 
 task api(type: Javadoc) {
 	group = 'Documentation'

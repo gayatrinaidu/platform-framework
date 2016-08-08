@@ -1,0 +1,24 @@
+<productname>Platform Integration</productname>
+<releaseinfo>{platform-integration-version}</releaseinfo>
+<copyright>
+	<year>2016</year>
+	<holder>Altimetrik Software Pvt. Ltd.</holder>
+</copyright>
+<authorgroup>
+		<author>
+				<firstname>Harish</firstname>
+				<surname>Mangala</surname>
+		</author>
+		<author>
+				<firstname>Sambit</firstname>
+				<surname>Rath</surname>
+		</author>
+</authorgroup>
+<legalnotice>
+	<para>
+		Copies of this document may be made for your own use and for distribution to
+		others, provided that you do not charge any fee for such copies and further
+		provided that each copy contains this Copyright Notice, whether distributed in
+		print or electronically.
+	</para>
+</legalnotice>

@@ -1,0 +1,349 @@
+[[testing]]
+=== Testing Platform Kafka
+
+==== Introduction
+
+The `spring-kafka-test` jar contains some useful utilities to assist with testing your applications.
+
+==== JUnit
+
+`o.s.kafka.test.utils.KafkaUtils` provides some static methods to set up producer and consumer properties:
+
+[source, java]
+----
+/**
+ * Set up test properties for an {@code <Integer, String>} consumer.
+ * @param group the group id.
+ * @param autoCommit the auto commit.
+ * @param embeddedKafka a {@link KafkaEmbedded} instance.
+ * @return the properties.
+ */
+public static Map<String, Object> consumerProps(String group, String autoCommit,
+                                       KafkaEmbedded embeddedKafka) { ... }
+
+/**
+ * Set up test properties for an {@code <Integer, String>} producer.
+ * @param embeddedKafka a {@link KafkaEmbedded} instance.
+ * @return the properties.
+ */
+public static Map<String, Object> senderProps(KafkaEmbedded embeddedKafka) { ... }
+----
+
+A JUnit `@Rule` is provided that creates an embedded kafka server.
+
+[source, java]
+----
+/**
+ * Create embedded Kafka brokers.
+ * @param count the number of brokers.
+ * @param controlledShutdown passed into TestUtils.createBrokerConfig.
+ * @param topics the topics to create (2 partitions per).
+ */
+public KafkaEmbedded(int count, boolean controlledShutdown, String... topics) { ... }
+
+/**
+ *
+ * Create embedded Kafka brokers.
+ * @param count the number of brokers.
+ * @param controlledShutdown passed into TestUtils.createBrokerConfig.
+ * @param partitions partitions per topic.
+ * @param topics the topics to create.
+ */
+public KafkaEmbedded(int count, boolean controlledShutdown, int partitions, String... topics) { ... }
+----
+
+The embedded kafka class has a utility method allowing you to consume for all the topics it created:
+
+[source, java]
+----
+Map<String, Object> consumerProps = KafkaTestUtils.consumerProps("testT", "false", embeddedKafka);
+DefaultKafkaConsumerFactory<Integer, String> cf = new DefaultKafkaConsumerFactory<Integer, String>(
+        consumerProps);
+Consumer<Integer, String> consumer = cf.createConsumer();
+embeddedKafka.consumeFromAllEmbeddedTopics(consumer);
+----
+
+The `KafkaTestUtils` has some utility methods to fetch results from the consumer:
+
+[source, java]
+----
+/**
+ * Poll the consumer, expecting a single record for the specified topic.
+ * @param consumer the consumer.
+ * @param topic the topic.
+ * @return the record.
+ * @throws org.junit.ComparisonFailure if exactly one record is not received.
+ */
+public static <K, V> ConsumerRecord<K, V> getSingleRecord(Consumer<K, V> consumer, String topic) { ... }
+
+/**
+ * Poll the consumer for records.
+ * @param consumer the consumer.
+ * @return the records.
+ */
+public static <K, V> ConsumerRecords<K, V> getRecords(Consumer<K, V> consumer) { ... }
+----
+
+Usage:
+
+[source, java]
+----
+...
+template.sendDefault(0, 2, "bar");
+ConsumerRecord<Integer, String> received = KafkaTestUtils.getSingleRecord(consumer, "topic");
+...
+----
+
+When the embedded server is started by JUnit, it sets a system property `spring.embedded.kafka.brokers` to the address
+of the broker(s).
+A convenient constant `KafkaEmbedded.SPRING_EMBEDDED_KAFKA_BROKERS` is provided for this property.
+
+==== Hamcrest Matchers
+
+The `o.s.kafka.test.hamcrest.KafkaMatchers` provides the following matchers:
+
+[source, java]
+----
+/**
+ * @param key the key
+ * @param <K> the type.
+ * @return a Matcher that matches the key in a consumer record.
+ */
+public static <K> Matcher<ConsumerRecord<K, ?>> hasKey(K key) { ... }
+
+/**
+ * @param value the value.
+ * @param <V> the type.
+ * @return a Matcher that matches the value in a consumer record.
+ */
+public static <V> Matcher<ConsumerRecord<?, V>> hasValue(V value) { ... }
+
+/**
+ * @param partition the partition.
+ * @return a Matcher that matches the partition in a consumer record.
+ */
+public static Matcher<ConsumerRecord<?, ?>> hasPartition(int partition) { ... }
+----
+
+==== AssertJ Conditions
+
+[source, java]
+----
+/**
+ * @param key the key
+ * @param <K> the type.
+ * @return a Condition that matches the key in a consumer record.
+ */
+public static <K> Condition<ConsumerRecord<K, ?>> key(K key) { ... }
+
+/**
+ * @param value the value.
+ * @param <V> the type.
+ * @return a Condition that matches the value in a consumer record.
+ */
+public static <V> Condition<ConsumerRecord<?, V>> value(V value) { ... }
+
+/**
+ * @param partition the partition.
+ * @return a Condition that matches the partition in a consumer record.
+ */
+public static Condition<ConsumerRecord<?, ?>> partition(int partition) { ... }
+----
+
+==== Example
+
+Putting it all together:
+
+[source, java]
+----
+public class KafkaTemplateTests {
+
+    private static final String TEMPLATE_TOPIC = "templateTopic";
+
+    @ClassRule
+    public static KafkaEmbedded embeddedKafka = new KafkaEmbedded(1, true, TEMPLATE_TOPIC);
+
+    @Test
+    public void testTemplate() throws Exception {
+        Map<String, Object> consumerProps = KafkaTestUtils.consumerProps("testT", "false", embeddedKafka);
+        DefaultKafkaConsumerFactory<Integer, String> cf =
+                            new DefaultKafkaConsumerFactory<Integer, String>(consumerProps);
+        KafkaMessageListenerContainer<Integer, String> container =
+                            new KafkaMessageListenerContainer<>(cf, TEMPLATE_TOPIC);
+        final BlockingQueue<ConsumerRecord<Integer, String>> records = new LinkedBlockingQueue<>();
+        container.setMessageListener(new MessageListener<Integer, String>() {
+
+        	@Override
+        	public void onMessage(ConsumerRecord<Integer, String> record) {
+                System.out.println(record);
+                records.add(record);
+            }
+
+        });
+        container.setBeanName("templateTests");
+        container.start();
+        ContainerTestUtils.waitForAssignment(container, embeddedKafka.getPartitionsPerTopic());
+        Map<String, Object> senderProps = KafkaTestUtils.senderProps(embeddedKafka);
+        ProducerFactory<Integer, String> pf =
+                             new DefaultKafkaProducerFactory<Integer, String>(senderProps);
+        KafkaTemplate<Integer, String> template = new KafkaTemplate<>(pf);
+        template.setDefaultTopic(TEMPLATE_TOPIC);
+        template.sendDefault("foo");
+        assertThat(records.poll(10, TimeUnit.SECONDS), hasValue("foo"));
+        template.sendDefault(0, 2, "bar");
+        ConsumerRecord<Integer, String> received = records.poll(10, TimeUnit.SECONDS);
+        assertThat(received, hasKey(2));
+        assertThat(received, hasPartition(0));
+        assertThat(received, hasValue("bar"));
+        template.send(TEMPLATE_TOPIC, 0, 2, "baz");
+        received = records.poll(10, TimeUnit.SECONDS);
+        assertThat(received, hasKey(2));
+        assertThat(received, hasPartition(0));
+        assertThat(received, hasValue("baz"));
+    }
+
+}
+----
+
+The above uses the hamcrest matchers; with `AssertJ`, the final part looks like this...
+
+[source, java]
+----
+...
+        assertThat(records.poll(10, TimeUnit.SECONDS)).has(value("foo"));
+        template.sendDefault(0, 2, "bar");
+        ConsumerRecord<Integer, String> received = records.poll(10, TimeUnit.SECONDS);
+        assertThat(received).has(key(2));
+        assertThat(received).has(partition(0));
+        assertThat(received).has(value("bar"));
+        template.send(TEMPLATE_TOPIC, 0, 2, "baz");
+        received = records.poll(10, TimeUnit.SECONDS);
+        assertThat(received).has(key(2));
+        assertThat(received).has(partition(0));
+        assertThat(received).has(value("baz"));
+    }
+}
+----
+
+=== Testing Platform Neo4j
+
+Now that the Neo4j Application is running, you can test it. You can use any REST client you wish. The following examples use the *nix tool curl.
+
+First you want to see the top level service.
+[source, java]
+----
+$ curl http://localhost:8080
+{
+  "_links" : {
+    "user" : {
+      "href" : "http://localhost:8080/user{?page,size,sort}",
+      "templated" : true
+    }
+  }
+}
+----
+
+Here you get a first glimpse of what this server has to offer. There is a user link located at http://localhost:8080/user. It has some options such as ?page, ?size, and ?sort.
+[source, java]
+----
+$ curl http://localhost:8080/user
+{
+  "_links" : {
+    "self" : {
+      "href" : "http://localhost:8080/user{?page,size,sort}",
+      "templated" : true
+    }
+  },
+  "page" : {
+    "size" : 20,
+    "totalElements" : 0,
+    "totalPages" : 0,
+    "number" : 0
+  }
+}
+----
+
+There are currently no elements and hence no pages. Time to create a new User!
+[source, java]
+----
+$ curl -i -X POST -H "Content-Type:application/json" -d '{  "firstName" : "Sambit",  "lastName" : "Rath" }' http://localhost:8080/user
+
+HTTP/1.1 201 Created
+Server: Apache-Coyote/1.1
+Location: http://localhost:8080/user/0
+Content-Length: 0
+Date: Mon, 01 Aug 2016 16:28:55 GMT
+----
+
+From this you can query against for all user:
+[source, java]
+----
+$ curl http://localhost:8080/user
+{
+  "_links" : {
+    "self" : {
+      "href" : "http://localhost:8080/user{?page,size,sort}",
+      "templated" : true
+    }
+  },
+  "_embedded" : {
+    "people" : [ {
+      "firstName" : "Sambit",
+      "lastName" : "Rath",
+      "_links" : {
+        "self" : {
+          "href" : "http://localhost:8080/user/0"
+        }
+      }
+    } ]
+  },
+  "page" : {
+    "size" : 20,
+    "totalElements" : 1,
+    "totalPages" : 1,
+    "number" : 0
+  }
+}
+----
+The user object contains a list with Sambit. Notice how it includes a self link. 
+You can query directly for the individual record:
+[source, java]
+----
+$ curl http://localhost:8080/user/0
+{
+  "firstName" : "Sambit",
+  "lastName" : "Rath",
+  "_links" : {
+    "self" : {
+      "href" : "http://localhost:8080/user/0"
+    }
+  }
+}
+----
+You can search records by last name.
+[source, java]
+----
+$ curl http://localhost:8080/user/search/findByLastName?name=Rath
+{
+  "_embedded" : {
+    "people" : [ {
+      "firstName" : "Sambit",
+      "lastName" : "Rath",
+      "_links" : {
+        "self" : {
+          "href" : "http://localhost:8080/user/0"
+        },
+        "person" : {
+          "href" : "http://localhost:8080/user/0"
+        }
+      }
+    } ]
+  },
+  "_links" : {
+    "self" : {
+      "href" : "http://localhost:8080/user/search/findByLastName?name=Rath"
+    }
+  }
+}
+----
+You can also issue PUT, PATCH, and DELETE REST calls to either replace, update, or delete existing records.

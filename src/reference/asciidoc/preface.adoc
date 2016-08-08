@@ -1,0 +1,4 @@
+[[preface]]
+The Platform Integration project applies core Spring concepts to the development of Integration solutions.
+We provide a "template" as a high-level abstraction for sending kafka messages.
+We also provide support for the graph database Neo4j.

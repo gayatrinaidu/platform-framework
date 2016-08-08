@@ -1,0 +1,168 @@
+[[neo4j-integration]]
+=== Platform Integration Neo4j
+
+==== Introduction
+
+This documentation pertains to versions 1.0.0 and above; for documentation for earlier releases, see the site
+
+You will build a Spring application that lets you create and retrieve User objects stored in a Neo4j NoSQL database using Spring Data REST.
+Spring Data REST takes the features of Spring HATEOAS and Spring Data Neo4j and combines them together automatically.
+
+These are discussed in the following sections.
+
+[[neo4j-create-domain-object]]
+==== Create a domain object
+
+Create a new domain object to present a `User`.
+The User has a first name and last name.
+There is also an id object that is configured to be automatically generated so you don not have to deal with that.
+[source, java]
+----
+src/main/java/com/platform/integration/neo4j/domain/User.java
+
+@NodeEntity
+public class User implements Model {
+
+	@GraphId
+	private Long id;
+	private String firstName;
+	private String lastName;
+
+	public String getFirstName() {
+		return firstName;
+	}
+
+	public void setFirstName(String firstName) {
+		this.firstName = firstName;
+	}
+
+	public String getLastName() {
+		return lastName;
+	}
+
+	public void setLastName(String lastName) {
+		this.lastName = lastName;
+	}
+
+	public Long getId() {
+		return id;
+	}
+
+	public void setId(Long id) {
+		this.id = id;
+	}
+}
+----
+[[neo4j-createRepository]]
+
+==== Create a User repository
+This repository is an interface and will allow you to perform various operations involving User objects. It gets these operations by extending the `PagingAndSortingRepositry` interface defined in Spring Data Commons.
+
+At runtime, Spring Data REST will create an implementation of this interface automatically. Then it will use the `@RepositoryRestResource` annotation to direct Spring MVC to create RESTful endpoints at /user.
+
+[source, java]
+----
+src/main/java/com/platform/integration/neo4j/repo/UserRepository.java
+
+@RepositoryRestResource(collectionResourceRel = "user", path = "user")
+public interface UserRepository extends PagingAndSortingRepository<User, Long> {
+
+	/**
+	 * Search by Last Name.
+	 * @param lastname String
+	 * @return List
+	 * 	List of users
+	 */
+	List<User> findByLastName(@Param("lastname") String lastname);
+
+	/**
+	 * Search byLike Last Name.
+	 * @param lastname String
+	 * @param pageable Pageable
+	 * @return Page
+	 * 	Page of users
+	 */
+	Page<User> findByLastNameStartsWith(@Param("lastname") String lastname, Pageable pageable);
+
+	/**
+	 * Search By Last Name and Order by First Name Ascending.
+	 * @param lastname String
+	 * @param sort Sort
+	 * @return List
+	 * List of users
+	 */
+	List<User> findByLastNameOrderByFirstNameAsc(@Param("lastname") String lastname, Sort sort);
+
+	/**
+	 * Search By Last Name and Order by First Name Descending.
+	 * @param lastname String
+	 * @param sort Sort
+	 * @return List
+	 * List of users
+	 */
+	List<User> findByLastNameOrderByFirstNameDesc(@Param("lastname") String lastname, Sort sort);
+}
+----
+==== Make the application executable
+
+Although it is possible to package this service as a traditional WAR file for deployment to an external application server, the simpler approach demonstrated below creates a stand alone application. You package everything in a single, executable JAR file, driven by a good old Java main() method. Along the way, you use Springs support for embedding the Tomcat servlet container as the HTTP runtime, instead of deploying to an external instance.
+
+[source, java]
+----
+src/main/java/com/platform/integration/neo4j/Application.java
+
+@SpringBootApplication
+@EnableNeo4jRepositories
+public class Application extends Neo4jConfiguration {
+	Logger log = Logger.getLogger(Application.class);
+	/**
+	 * Application Constructor to load base packages.
+	 */
+	public Application() {
+		setBasePackage("com.platform.integration.neo4j");
+	}
+
+	/**
+	 * Initialize Graph Database.
+	 * @return Graph Database Factory
+	 */
+	@Bean(destroyMethod = "shutdown")
+	public GraphDatabaseService graphDatabaseService() {
+		return new GraphDatabaseFactory().newEmbeddedDatabase("target/entity.db");
+	}
+
+	/**
+	 * Create Embedded Servlet Container.
+	 * @return servletContainer Bean
+	 */
+	@Bean
+	public EmbeddedServletContainerFactory servletContainer() {
+		return new TomcatEmbeddedServletContainerFactory();
+	}
+
+	public static void main(String[] args) {
+		SpringApplication.run(Application.class, args);
+	}
+
+}
+----
+
+`@SpringBootApplication` is a convenience annotation that adds all of the following:
+`@Configuration` tags the class as a source of bean definitions for the application context.
+`@EnableAutoConfiguration` tells Spring Boot to start adding beans based on classpath settings, other beans, and various property settings.
+Normally you would add `@EnableWebMvc` for a Spring MVC app, but Spring Boot adds it automatically when it sees spring-webmvc on the classpath. This flags the application as a web application and activates key behaviors such as setting up a DispatcherServlet.
+`@ComponentScan` tells Spring to look for other components, configurations, and services in the the hello package, allowing it to find the HelloController.
+The main() method uses Spring Boots SpringApplication.run() method to launch an application. Did you notice that there was not a single line of XML? No web.xml file either. This web application is 100% pure Java and you did not have to deal with configuring any plumbing or infrastructure.
+
+The `@EnableNeo4jRepositories` annotation activates Spring Data Neo4j. Spring Data Neo4j will create a concrete implementation of the PersonRepository and configure it to talk to an embedded Neo4j database using the Cypher query language. Currently you have to provide the mandatory base-package of your entities via a `setBasePackage("com.platform.integration.neo4j")` method call in the configuration constructor.
+
+==== Build an executable JAR
+
+If you are using Gradle, you can run the application using `./gradlew bootRun`
+
+You can build a single executable JAR file that contains all the necessary dependencies, classes, and resources. This makes it easy to ship, version, and deploy the service as an application throughout the development life cycle, across different environments, and so forth.
+`./gradlew build`
+Then you can run the JAR file:
+`java -jar build/libs/platform-integration-neo4j-1.0.0.jar`
+If you are using Maven, you can run the application using `mvn spring-boot:run`. Or you can build the JAR file with mvn clean package and run the JAR by typing:
+`java -jar target/platform-integration-neo4j-1.0.0.jar`
